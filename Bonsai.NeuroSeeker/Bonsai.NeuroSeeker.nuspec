@@ -1,0 +1,21 @@
+﻿<?xml version="1.0"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd">
+  <metadata>
+    <id>$id$</id>
+    <version>$version$</version>
+    <title>$title$</title>
+    <authors>$author$</authors>
+    <owners>$author$</owners>
+    <licenseUrl>https://bitbucket.org/kampff-lab/bonsai.neuroseeker/LICENSE</licenseUrl>
+    <projectUrl>https://bitbucket.org/kampff-lab/bonsai.neuroseeker</projectUrl>
+    <iconUrl>https://bitbucket.org/horizongir/bonsai/raw/7aacc64dc4647e57362ab310238591dc197fef0d/Resources/Bonsai.png</iconUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>$description$</description>
+    <copyright>Kampff Lab © 2016</copyright>
+    <tags>Bonsai NeuroSeeker</tags>
+  </metadata>
+  <files>
+    <file src="..\Externals\NSK_API\Windows DLL\V1.8\libNeuroseekerAPI_msvc.dll" target="build\native\bin\Win32"/>
+    <file src="..\Release\NeuroSeeker_C_DLL.dll" target="build\native\bin\Win32"/>
+  </files>
+</package>
