@@ -44,7 +44,7 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <LibraryPath>C:\Users\Kampff Lab\OneDrive\Programming\C\NeuroSeeker_Cpp_API\IMEC_NSK_repo\API\Windows DLL\V1.8;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(SolutionDir)Externals\NSK_API\Windows DLL\V1.8\;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
@@ -63,7 +63,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>$(SolutionDir)Externals\NSK_API\Windows DLL\V1.8\libNeuroseekerAPI_msvc.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>libNeuroseekerAPI_msvc.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>
