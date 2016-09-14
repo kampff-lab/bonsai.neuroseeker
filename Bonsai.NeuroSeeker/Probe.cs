@@ -56,6 +56,11 @@ namespace Bonsai.NeuroSeeker
 
         [Category("Configuration")]
         [Editor("Bonsai.Design.OpenFileNameEditor, Bonsai.Design", typeof(UITypeEditor))]
+        [Description("Channels Calibration CSV")]
+        public string ChannelsCSV { get; set; }
+
+        [Category("Configuration")]
+        [Editor("Bonsai.Design.OpenFileNameEditor, Bonsai.Design", typeof(UITypeEditor))]
         [Description("Bias Volatge (0 - 2.5V)")]
         public float BiasVoltage { get; set; }
 
@@ -64,6 +69,10 @@ namespace Bonsai.NeuroSeeker
         [Description("Update Bias Volatge")]
         public bool UpdateBias { get; set; }
 
+        [Category("Configuration")]
+        [Editor("Bonsai.Design.OpenFileNameEditor, Bonsai.Design", typeof(UITypeEditor))]
+        [Description("Active Regions")]
+        public bool[] ActiveRegions { get; set; }
 
         // Import relevant functions from Nsk C DLL
         [DllImport("NeuroSeeker_C_DLL", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
@@ -71,7 +80,8 @@ namespace Bonsai.NeuroSeeker
 
         // Import relevant functions from Nsk C DLL
         [DllImport("NeuroSeeker_C_DLL", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
-        public static extern void NSK_Configure(bool TestMode, float BiasVoltage, string OffsetCSV, string SlopeCSV, string CompCSV);
+        public static extern void NSK_Configure(int[] ActiveRegions, bool TestMode, float BiasVoltage, string OffsetCSV, string SlopeCSV, string CompCSV, string ChannelsCSV);
+
 
         // Import relevant functions from Nsk C DLL
         [DllImport("NeuroSeeker_C_DLL", CallingConvention = CallingConvention.Cdecl)]
@@ -104,6 +114,8 @@ namespace Bonsai.NeuroSeeker
             // Set Default values
             BufferSize = 500;
 
+            ActiveRegions = new bool[12];
+            int[] ActiveRegionsMarshal = new int[12];
             // Create a source of CvMats
             source = Observable.Create<OpenCV.Net.Mat>(observer =>
             {
@@ -111,7 +123,9 @@ namespace Bonsai.NeuroSeeker
                 NSK_Open(LEDs);
 
                 // Configure ADCs and Channels
-                NSK_Configure(TestMode, BiasVoltage, OffsetCSV, SlopeCSV, CompCSV);
+                for (int i = 0; i < ActiveRegions.Length; ++i)
+                    ActiveRegionsMarshal[i] = Convert.ToByte(ActiveRegions[i]);
+                NSK_Configure(ActiveRegionsMarshal, TestMode, BiasVoltage, OffsetCSV, SlopeCSV, CompCSV, ChannelsCSV);
 
                 // Start Probe thread
                 float_buffer = new float[n_channels * BufferSize];
