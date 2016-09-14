@@ -4,6 +4,8 @@
 #include <fstream>
 #include <iostream>
 #include <iomanip>
+#include <iostream>     
+#include <fstream>  
 
 #include "NeuroseekerAPI.h"
 #include "ElectrodePacket.h"
@@ -14,8 +16,8 @@
 // Global Classes
 NeuroseekerAPI api;
 ElectrodePacket ep;
-AllChannelConfigurations acc;
-GeneralConfiguration gc;
+//AllChannelConfigurations acc;
+//GeneralConfiguration gc;
 NeuroseekerDataLinkIntf *DataLink;
 
 // Global variables
@@ -31,6 +33,75 @@ using namespace std;
 // "C" style used for function declarations
 extern "C"
 {
+
+	__declspec(dllexport) enum class CSVState {
+		UnquotedField,
+		QuotedField,
+		QuotedQuote
+	};
+
+
+	__declspec(dllexport) void readCSVRow(const std::string &row, std::vector<std::string> fields) {
+		CSVState state = CSVState::UnquotedField;
+		//std::vector<std::string> fields{ "" };
+		size_t i = 0; // index of the current field
+		for (char c : row) {
+			switch (state) {
+			case CSVState::UnquotedField:
+				switch (c) {
+				case ',': // end of field
+					fields.push_back(""); i++;
+					break;
+				case '"': state = CSVState::QuotedField;
+					break;
+				default:  fields[i].push_back(c);
+					break;
+				}
+				break;
+			case CSVState::QuotedField:
+				switch (c) {
+				case '"': state = CSVState::QuotedQuote;
+					break;
+				default:  fields[i].push_back(c);
+					break;
+				}
+				break;
+			case CSVState::QuotedQuote:
+				switch (c) {
+				case ',': // , after closing quote
+					fields.push_back(""); i++;
+					state = CSVState::UnquotedField;
+					break;
+				case '"': // "" -> "
+					fields[i].push_back('"');
+					state = CSVState::QuotedField;
+					break;
+				default:  // end of quote
+					state = CSVState::UnquotedField;
+					break;
+				}
+				break;
+			}
+		}
+		//return fields;
+	}
+
+
+	void readCSV(std::istream &in, std::vector<std::vector<std::string>> table) {
+		//std::vector<std::vector<std::string>> table;
+		std::string row;
+		while (true) {
+			std::getline(in, row);
+			if (in.bad() || in.eof()) {
+				break;
+			}
+			std::vector<std::string> fields{ "" };
+			readCSVRow(row, fields);
+			table.push_back(fields);
+		}
+		//return table;
+	}
+
 	// Open NeuroSeeker Probe
 	__declspec(dllexport) void NSK_Open(bool LEDs)
 	{
@@ -90,7 +161,7 @@ extern "C"
 	}
 
 	// Configure NeuroSeeker Probe
-	__declspec(dllexport) void NSK_Configure(bool testMode, float biasVoltage, char *OffsetCSV, char *SlopeCSV, char *CompCSV)
+	__declspec(dllexport) void NSK_Configure(int* activeRegions, bool testMode, float biasVoltage, char *OffsetCSV, char *SlopeCSV, char *CompCSV, char * ChannelsCSV)
 	{
 		// Error Corde containers
 		ReadCsvErrorCode rcec;
@@ -100,12 +171,13 @@ extern "C"
 		ChannelConfigErrorCode ccec;
 
 		// Configure Nsk probe
-		std::cout << "Configuring NeuroSeeker Probe\n";
+		std::cout << "Configuring NeuroSeekerrrs Probe\n";
 
 		// Convert calibration CSV file paths to C++ strings
 		const std::string off_str(OffsetCSV);
 		const std::string slope_str(SlopeCSV);
 		const std::string comp_str(CompCSV);
+		const char* chanConf_str(ChannelsCSV);
 
 		// Loading calibration parameters from CSVs
 		std::cout << "Reading OFFSET calibration CSV file: ";
@@ -117,7 +189,7 @@ extern "C"
 		std::cout << "Reading COMPARATOR calibration CSV file: ";
 		rcec = api.readComparatorCalibrationFromCsv(comp_str);
 		std::cout << rcec << "\n";
-		
+
 		// Write Calibration paramters to general register
 		std::cout << "Writing calibration parameters: ";
 		srac = api.writeChannelRegisters(true);
@@ -127,7 +199,7 @@ extern "C"
 		for (unsigned int i = 0; i < 12; i++)
 		{
 			std::cout << "Activating probe region: " << i;
-			if (i == 0)
+			/*if (i == 0)
 			{
 				gec = gc.setBiasPixEnBit(i, true);
 				std::cout << " " << gec << " True\n";
@@ -136,10 +208,15 @@ extern "C"
 			{
 				gec = gc.setBiasPixEnBit(i, false);
 				std::cout << " " << gec << " False\n";
-			}
+			}*/
+			gec = api.generalConfiguration.setBiasPixEnBit(i, (bool)activeRegions[i]);
+			std::string active = "False\n";
+			if (activeRegions[i])
+				active = "True\n";
+			std::cout << " " << gec << " " << active;
 		}
 		std::cout << "Activating probe region: " << 12; // Activate 13th region (as is required)
-		gec = gc.setBiasPixEnBit(12, true);
+		gec = api.generalConfiguration.setBiasPixEnBit(12, true);
 		std::cout << " " << gec << " True\n";
 
 		// Write settings to register
@@ -156,26 +233,37 @@ extern "C"
 		std::cout << biasVoltage << "V " << dcec << "\n";
 
 		// Set Gain and Mode for every channel
-		std::cout << "Setting channel parameters (Gain, Mode, Ref): ";
-		int c = 0;
-		for (c = 0; c < n_channels; c++)
+		std::filebuf confFileBuffer;
+		if (confFileBuffer.open(chanConf_str, std::ios::in))
 		{
-			ccec = acc.setGain(c, 2);
-			if (ccec) { break; }
-			ccec = acc.setMode(c, true);
-			if (ccec) { break; }
-			ccec = acc.setRefSel(c, REF_SEL_EXT);
-			if (ccec) { break; }
-			ccec = acc.setBw(c, (unsigned char) 0);
-			if (ccec) { break; }
-		}
-		// Check/Report for exception (channel config error)
-		if (ccec)
-		{
-			std::cout << "channel config failure - CH# " << c << ", Error: " << ccec << "\n";
+			std:istream confFileIS(&confFileBuffer);
+			std::vector<std::vector<std::string>> confFileData;
+			readCSV(confFileIS, confFileData);
+
+			std::cout << "Setting channel parameters (Gain, Mode, Ref): ";
+			int c = 0;
+			for (c = 0; c < n_channels; c++)
+			{
+				ccec = api.allChannelConfigurations.setGain(c, 2);
+				if (ccec) { break; }
+				ccec = api.allChannelConfigurations.setMode(c, true);
+				if (ccec) { break; }
+				ccec = api.allChannelConfigurations.setRefSel(c, REF_SEL_NONE);
+				if (ccec) { break; }
+				ccec = api.allChannelConfigurations.setBw(c, (unsigned char)0);
+				if (ccec) { break; }
+			}
+			// Check/Report for exception (channel config error)
+			if (ccec)
+			{
+				std::cout << "channel config failure - CH# " << c << ", Error: " << ccec << "\n";
+			}
+			else {
+				std::cout << "channel config success.\n";
+			}
 		}
 		else {
-			std::cout << "channel config success.\n";
+			std::cout << "Reading of Channel Configuration CSV file failed.\n";
 		}
 
 		// Write settings to channel register
@@ -188,7 +276,7 @@ extern "C"
 		{
 			// Send a sinewave from Headstage DAC
 			std::cout << "Enable Testing: ";
-			gec = gc.setTestInputEnBit(true);
+			gec = api.generalConfiguration.setTestInputEnBit(true);
 			std::cout << gec << "\n";
 
 			// Write settings to general register
@@ -197,7 +285,7 @@ extern "C"
 			std::cout << srac << "\n";
 
 			// Start genertating a sinewave on DAC_A
-			dcec = api.generateSine(DAC_A, 2, 0.0f, 5);
+			dcec = api.generateSine(DAC_A, 5, 0.0f, 5);
 			std::cout << "Gernating Sinewave Test Signal (1660 Hz): ";
 			std::cout << dcec << "\n\n";
 			testing = true;
@@ -217,7 +305,7 @@ extern "C"
 
 		// Allocate memory for recording buffer (1440 floats per sample)
 		n_samples = buffer_size;
-		data_matrix = (float *) malloc(sizeof(float) * n_channels * n_samples);
+		data_matrix = (float *)malloc(sizeof(float) * n_channels * n_samples);
 
 		// Reset probe
 		std::cout << "Resetting probe: ";
@@ -264,7 +352,7 @@ extern "C"
 
 	}
 
-	
+
 	// Close NeuroSeeker Probe
 	__declspec(dllexport) void NSK_Close()
 	{
@@ -288,7 +376,7 @@ extern "C"
 		{
 			std::cout << "Stopping the Test Mode: ";
 			dcec = api.generateDC(DAC_A, 0.0f);
-			gec = gc.setTestInputEnBit(false);
+			gec = api.generalConfiguration.setTestInputEnBit(false);
 			srac = api.writeGeneralRegister(true);
 			std::cout << dcec << " " << gec << " " << srac << "\n";
 			testing = false;
@@ -360,4 +448,7 @@ extern "C"
 		free(DataLink);
 		free(data_matrix);
 	}
+
+
+
 }
