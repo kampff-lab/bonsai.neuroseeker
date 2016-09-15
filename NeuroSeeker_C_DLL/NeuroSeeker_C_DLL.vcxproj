@@ -95,7 +95,11 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="CSVParser.cpp" />
     <ClCompile Include="Nsk_C_DLL.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="CSVParser.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

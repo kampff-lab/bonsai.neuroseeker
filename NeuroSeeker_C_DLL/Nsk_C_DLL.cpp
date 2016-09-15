@@ -3,22 +3,20 @@
 #include <stdio.h>
 #include <fstream>
 #include <iostream>
-#include <iomanip>
-#include <iostream>     
-#include <fstream>  
+#include <iomanip>  
 
 #include "NeuroseekerAPI.h"
 #include "ElectrodePacket.h"
 #include "ChannelConfiguration.h"
 #include "GeneralConfiguration.h"
 #include "NeuroseekerDataLinkFile.h"
+#include "CSVParser.h"
 
 // Global Classes
 NeuroseekerAPI api;
 ElectrodePacket ep;
-//AllChannelConfigurations acc;
-//GeneralConfiguration gc;
 NeuroseekerDataLinkIntf *DataLink;
+
 
 // Global variables
 unsigned int n_channels = 1440;
@@ -33,75 +31,6 @@ using namespace std;
 // "C" style used for function declarations
 extern "C"
 {
-
-	__declspec(dllexport) enum class CSVState {
-		UnquotedField,
-		QuotedField,
-		QuotedQuote
-	};
-
-
-	__declspec(dllexport) void readCSVRow(const std::string &row, std::vector<std::string> fields) {
-		CSVState state = CSVState::UnquotedField;
-		//std::vector<std::string> fields{ "" };
-		size_t i = 0; // index of the current field
-		for (char c : row) {
-			switch (state) {
-			case CSVState::UnquotedField:
-				switch (c) {
-				case ',': // end of field
-					fields.push_back(""); i++;
-					break;
-				case '"': state = CSVState::QuotedField;
-					break;
-				default:  fields[i].push_back(c);
-					break;
-				}
-				break;
-			case CSVState::QuotedField:
-				switch (c) {
-				case '"': state = CSVState::QuotedQuote;
-					break;
-				default:  fields[i].push_back(c);
-					break;
-				}
-				break;
-			case CSVState::QuotedQuote:
-				switch (c) {
-				case ',': // , after closing quote
-					fields.push_back(""); i++;
-					state = CSVState::UnquotedField;
-					break;
-				case '"': // "" -> "
-					fields[i].push_back('"');
-					state = CSVState::QuotedField;
-					break;
-				default:  // end of quote
-					state = CSVState::UnquotedField;
-					break;
-				}
-				break;
-			}
-		}
-		//return fields;
-	}
-
-
-	void readCSV(std::istream &in, std::vector<std::vector<std::string>> table) {
-		//std::vector<std::vector<std::string>> table;
-		std::string row;
-		while (true) {
-			std::getline(in, row);
-			if (in.bad() || in.eof()) {
-				break;
-			}
-			std::vector<std::string> fields{ "" };
-			readCSVRow(row, fields);
-			table.push_back(fields);
-		}
-		//return table;
-	}
-
 	// Open NeuroSeeker Probe
 	__declspec(dllexport) void NSK_Open(bool LEDs)
 	{
@@ -160,6 +89,17 @@ extern "C"
 		std::cout << biasVoltage << "V " << dcec << "\n";
 	}
 
+	//Helper function to check if a channel is a reference or active one
+	bool CheckIfChannelIsActive(int channel)
+	{
+		if ((channel >= 57 && channel <= 64) || (channel >= 177 && channel <= 184) || (channel >= 297 && channel <= 304) || (channel >= 417 && channel <= 424) ||
+			(channel >= 537 && channel <= 544) || (channel >= 657 && channel <= 664) || (channel >= 777 && channel <= 784) || (channel >= 897 && channel <= 904) ||
+			(channel >= 1017 && channel <= 1024) || (channel >= 1137 && channel <= 1144) || (channel >= 1257 && channel <= 1264) || (channel >= 1377 && channel <= 1384))
+			return false;
+		else
+			return true;
+	}
+
 	// Configure NeuroSeeker Probe
 	__declspec(dllexport) void NSK_Configure(int* activeRegions, bool testMode, float biasVoltage, char *OffsetCSV, char *SlopeCSV, char *CompCSV, char * ChannelsCSV)
 	{
@@ -209,7 +149,7 @@ extern "C"
 				gec = gc.setBiasPixEnBit(i, false);
 				std::cout << " " << gec << " False\n";
 			}*/
-			gec = api.generalConfiguration.setBiasPixEnBit(i, (bool)activeRegions[i]);
+			gec = api.generalConfiguration.setBiasPixEnBit(i, activeRegions[i]);
 			std::string active = "False\n";
 			if (activeRegions[i])
 				active = "True\n";
@@ -233,38 +173,32 @@ extern "C"
 		std::cout << biasVoltage << "V " << dcec << "\n";
 
 		// Set Gain and Mode for every channel
-		std::filebuf confFileBuffer;
-		if (confFileBuffer.open(chanConf_str, std::ios::in))
-		{
-			std:istream confFileIS(&confFileBuffer);
-			std::vector<std::vector<std::string>> confFileData;
-			readCSV(confFileIS, confFileData);
+		CSVParser CsvParser = CSVParser(chanConf_str); 
 
-			std::cout << "Setting channel parameters (Gain, Mode, Ref): ";
-			int c = 0;
-			for (c = 0; c < n_channels; c++)
-			{
-				ccec = api.allChannelConfigurations.setGain(c, 2);
+		std::cout << "Setting channel parameters (Gain, Mode, Ref): ";
+		int c = 0;
+		for (c = 0; c < n_channels; c++)
+		{
+			if (CheckIfChannelIsActive(c)) {
+				ccec = api.allChannelConfigurations.setRefSel(c, RefSel(CsvParser.ChannelConfigReference[c]));
 				if (ccec) { break; }
-				ccec = api.allChannelConfigurations.setMode(c, true);
+				ccec = api.allChannelConfigurations.setGain(c, CsvParser.ChannelConfigGain[c]);
 				if (ccec) { break; }
-				ccec = api.allChannelConfigurations.setRefSel(c, REF_SEL_NONE);
+				ccec = api.allChannelConfigurations.setMode(c, CsvParser.ChannelConfigMode[c]);
 				if (ccec) { break; }
-				ccec = api.allChannelConfigurations.setBw(c, (unsigned char)0);
+				ccec = api.allChannelConfigurations.setBw(c, CsvParser.ChannelConfigBW[c]);
 				if (ccec) { break; }
 			}
-			// Check/Report for exception (channel config error)
-			if (ccec)
-			{
-				std::cout << "channel config failure - CH# " << c << ", Error: " << ccec << "\n";
-			}
-			else {
-				std::cout << "channel config success.\n";
-			}
+		}
+		// Check/Report for exception (channel config error)
+		if (ccec)
+		{
+			std::cout << "channel config failure - CH# " << c << ", Error: " << ccec << "\n";
 		}
 		else {
-			std::cout << "Reading of Channel Configuration CSV file failed.\n";
+			std::cout << "channel config success.\n";
 		}
+		
 
 		// Write settings to channel register
 		std::cout << "Writing to channel settings: ";
