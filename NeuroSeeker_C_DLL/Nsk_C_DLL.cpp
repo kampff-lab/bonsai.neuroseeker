@@ -228,7 +228,7 @@ extern "C"
 	}
 
 	// Start NeuroSeeker Probe
-	__declspec(dllexport) void NSK_Start(int buffer_size, bool stream)
+	__declspec(dllexport) void NSK_Start(int buffer_size, bool stream, char* _stream_file)
 	{
 		// Error Code containers
 		DigitalControlErrorCode dec;
@@ -260,8 +260,9 @@ extern "C"
 		stream_recording = stream;
 		if (stream_recording)
 		{
+			std::string stream_file(_stream_file);
 			std::cout << "Starting Recording Stream: ";
-			ec = api.startRecording();
+			ec = api.startRecording(stream_file);
 			std::cout << ec << "\n";
 		}
 	}
