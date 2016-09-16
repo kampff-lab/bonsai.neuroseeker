@@ -13,6 +13,7 @@ using OpenCV.Net;
 
 // TODO: replace this with the source output type.
 using TSource = OpenCV.Net.Mat;
+using Bonsai.IO;
 
 namespace Bonsai.NeuroSeeker
 {
@@ -40,8 +41,13 @@ namespace Bonsai.NeuroSeeker
         public bool Stream { get; set; }
 
         [Category("Acquisition")]
+        [Editor("Bonsai.Design.OpenFileNameEditor, Bonsai.Design", typeof(UITypeEditor))]
         [Description("Stream Recording File")]
         public string StreamFile { get; set; }
+
+        [Category("Acquisition")]
+        [Description("The optional suffix used to generate file names.")]
+        public PathSuffix Suffix { get; set; }
 
         [Category("Configuration")]
         [Editor("Bonsai.Design.OpenFileNameEditor, Bonsai.Design", typeof(UITypeEditor))]
@@ -133,11 +139,18 @@ namespace Bonsai.NeuroSeeker
 
                 // Start Probe thread
                 float_buffer = new float[n_channels * BufferSize];
-                if (StreamFile == null)
+                string streamFile = StreamFile;
+                if (!string.IsNullOrEmpty(streamFile))
                 {
-                    StreamFile = System.IO.Path.Combine(System.IO.Directory.GetParent(CompCSV).ToString(), "datalog.nsk");
+                    PathHelper.EnsureDirectory(streamFile);
                 }
-                NSK_Start(BufferSize, Stream, StreamFile);
+                else
+                { 
+                    streamFile = System.IO.Path.Combine(System.IO.Directory.GetParent(ChannelsCSV).ToString(), "datalog.nsk");
+                    PathHelper.EnsureDirectory(streamFile);
+                }
+                streamFile = PathHelper.AppendSuffix(streamFile, Suffix);
+                NSK_Start(BufferSize, Stream, streamFile);
                 var running = true;
                 var thread = new Thread(() =>
                 {
