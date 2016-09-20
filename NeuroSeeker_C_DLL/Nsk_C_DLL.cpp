@@ -139,16 +139,6 @@ extern "C"
 		for (unsigned int i = 0; i < 12; i++)
 		{
 			std::cout << "Activating probe region: " << i;
-			/*if (i == 0)
-			{
-				gec = gc.setBiasPixEnBit(i, true);
-				std::cout << " " << gec << " True\n";
-			}
-			else
-			{
-				gec = gc.setBiasPixEnBit(i, false);
-				std::cout << " " << gec << " False\n";
-			}*/
 			gec = api.generalConfiguration.setBiasPixEnBit(i, activeRegions[i]);
 			std::string active = "False\n";
 			if (activeRegions[i])
@@ -179,16 +169,14 @@ extern "C"
 		int c = 0;
 		for (c = 0; c < n_channels; c++)
 		{
-			if (CheckIfChannelIsActive(c)) {
-				ccec = api.allChannelConfigurations.setRefSel(c, RefSel(CsvParser.ChannelConfigReference[c]));
-				if (ccec) { break; }
-				ccec = api.allChannelConfigurations.setGain(c, CsvParser.ChannelConfigGain[c]);
-				if (ccec) { break; }
-				ccec = api.allChannelConfigurations.setMode(c, CsvParser.ChannelConfigMode[c]);
-				if (ccec) { break; }
-				ccec = api.allChannelConfigurations.setBw(c, CsvParser.ChannelConfigBW[c]);
-				if (ccec) { break; }
-			}
+			ccec = api.allChannelConfigurations.setRefSel(c, RefSel(CsvParser.ChannelConfigReference[c]));
+			if (ccec) { break; }
+			ccec = api.allChannelConfigurations.setGain(c, CsvParser.ChannelConfigGain[c]);
+			if (ccec) { break; }
+			ccec = api.allChannelConfigurations.setMode(c, CsvParser.ChannelConfigMode[c]);
+			if (ccec) { break; }
+			ccec = api.allChannelConfigurations.setBw(c, CsvParser.ChannelConfigBW[c]);
+			if (ccec) { break; }
 		}
 		// Check/Report for exception (channel config error)
 		if (ccec)
