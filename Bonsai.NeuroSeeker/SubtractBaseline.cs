@@ -19,65 +19,65 @@ namespace Bonsai.NeuroSeeker
     public class SubtractBaseline : Transform<TSource, TResult>
     {
         // Properties
-        [Description("Number of Rows")]
-        public int n_rows { get; set; }
-        [Description("Number of Columns")]
-        public int n_cols { get; set; }
         [Description("Alpha")]
-        public double alpha { get; set; }
-
-        public Mat baseline_vec;
-        public Mat prev_baseline_vec;
-        public Mat baseline_mat;
-        public Mat output;
-        private int frame_count = 0;
+        public double Alpha { get; set; }
 
         // Constructor (set defaults)
         public SubtractBaseline()
         {
-            n_rows = 1440;
-            n_cols = 500;
-            alpha = 0.1;
+            Alpha = 0.1;
         }
 
         public override IObservable<TResult> Process(IObservable<TSource> source)
         {
-            
-            return source.Select(input =>
+            // The function passed to Defer is called on every subscription ("every run/repeat") 
+            return Observable.Defer(() =>
             {
-                // If "first frame", the prev = current
-                if (frame_count == 0)
+                Mat baseline_vec = null;
+                Mat acc = null;
+                Mat baseline_mat = null;
+                Mat output = null;
+                int frame_count = 0;
+
+                return source.Select(input =>
                 {
-                    // Pre-allocate space
-                    baseline_vec = new Mat(n_rows, 1, Depth.F32, 1);
-                    prev_baseline_vec = new Mat(n_rows, 1, Depth.F32, 1);
-                    baseline_mat = new Mat(n_rows, n_cols, Depth.F32, 1);
-                    output = new Mat(n_rows, n_cols, Depth.F32, 1);
+                   // If "first frame", the prev = current
+                   if (frame_count == 0)
+                    {
+                        // Determine MAT size
+                        var n_rows = input.Size.Height;
+                        var n_cols = input.Size.Width;
+                        
+                        // Pre-allocate space
+                        baseline_vec = new Mat(n_rows, 1, Depth.F32, 1);
+                        acc = new Mat(n_rows, 1, Depth.F32, 1);
+                        baseline_mat = new Mat(n_rows, n_cols, Depth.F32, 1);
+                        output = new Mat(n_rows, n_cols, Depth.F32, 1);
 
-                    // Average along rows
-                    CV.Reduce(input, baseline_vec, 1, ReduceOperation.Avg);
-                    CV.Copy(baseline_vec, prev_baseline_vec);
-                } else {
-                    // Average along rows
-                    CV.Reduce(input, baseline_vec, 1, ReduceOperation.Avg);
-                }
+                        // Average along rows
+                        CV.Reduce(input, baseline_vec, 1, ReduceOperation.Avg);
+                        CV.Copy(baseline_vec, acc);
+                    }
+                    else
+                    {
+                        // Average along rows
+                        CV.Reduce(input, baseline_vec, 1, ReduceOperation.Avg);
+                    }
 
-                // Compute running average of baseline and save as previous
-                CV.AddWeighted(baseline_vec, alpha, prev_baseline_vec, (1.0 - alpha), 0.0, baseline_vec);
-                CV.Copy(baseline_vec, prev_baseline_vec);
+                    // Compute running average of baseline and save as previous
+                    CV.RunningAvg(baseline_vec, acc, Alpha);
 
-                // Replicate (to produce a frame for subtraction)
-                CV.Repeat(baseline_vec, baseline_mat);
+                    // Replicate (to produce a frame for subtraction)
+                    CV.Repeat(acc, baseline_mat);
 
-                // Subtract basline_mat from inout output
-                CV.Sub(input, baseline_mat, output);
+                    // Subtract basline_mat from inout output
+                    CV.Sub(input, baseline_mat, output);
 
-                // Update frame counter
-                frame_count++;
+                    // Update frame counter
+                    frame_count++;
 
-                return output;
-
-
+                    return output;
+                });
             });
         }
     }
