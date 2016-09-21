@@ -33,6 +33,10 @@ namespace Bonsai.NeuroSeeker
         [Description("Sample Buffer Size")]
         public int BufferSize { get; set; }
 
+        [Category("Acquisition")]
+        [Description("Sample Time (ms)")]
+        public int Interval { get; set; }
+
         // Import relevant functions from Nsk C DLL
         [DllImport("NeuroSeeker_C_DLL", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
         public static extern void NSK_Open_File(string DataFile, int BufferSize);
@@ -74,9 +78,14 @@ namespace Bonsai.NeuroSeeker
                     {
                         // Read all channels from File
                         observer.OnNext(NSK_Read_File(n_channels, BufferSize));
-                        Thread.Sleep(50);
 
                         // Read counter and synchro
+
+                        // Sleep to control buffer replay
+                        if(Interval == 0)
+                        {
+                            Thread.Sleep(Interval);
+                        }
                     }
                 });
 

@@ -17,7 +17,6 @@ NeuroseekerAPI api;
 ElectrodePacket ep;
 NeuroseekerDataLinkIntf *DataLink;
 
-
 // Global variables
 unsigned int n_channels = 1440;
 unsigned int n_samples;
@@ -163,7 +162,7 @@ extern "C"
 		std::cout << biasVoltage << "V " << dcec << "\n";
 
 		// Set Gain and Mode for every channel
-		CSVParser CsvParser = CSVParser(chanConf_str); 
+		CSVParser CsvParser = CSVParser(chanConf_str);
 
 		std::cout << "Setting channel parameters (Gain, Mode, Ref): ";
 		int c = 0;
@@ -186,7 +185,7 @@ extern "C"
 		else {
 			std::cout << "channel config success.\n";
 		}
-		
+
 
 		// Write settings to channel register
 		std::cout << "Writing to channel settings: ";
@@ -349,6 +348,10 @@ extern "C"
 		ReadErrorCode rec;
 		unsigned int pos;
 
+		// Adjust file reading
+		// - Subtract baseline (DC)
+		// - Subtract median per Region Groups (2 region blocks)
+
 		// Fill data matrix with channel data from N packets (all_samp_ch0 -> all_samp_ch 1...all_samp_chN)
 		for (int i = 0; i < n_samples; i++)
 		{
@@ -372,6 +375,6 @@ extern "C"
 		free(data_matrix);
 	}
 
-
-
 }
+
+// Fin

@@ -105,6 +105,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ApplyProbeMap.cs" />
     <Compile Include="CreateDataModel.cs" />
     <Compile Include="DataModel.cs" />
     <Compile Include="DataModelPart.cs" />
@@ -118,6 +119,7 @@
     <Compile Include="SelectedChannel.cs" />
     <Compile Include="SubtractBaseline.cs" />
     <Compile Include="TextureHelper.cs" />
+    <Compile Include="RemoveColumnMedian.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Bonsai.NeuroSeeker.nuspec">
