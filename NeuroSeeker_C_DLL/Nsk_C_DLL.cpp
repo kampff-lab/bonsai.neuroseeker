@@ -19,8 +19,6 @@ NeuroseekerDataLinkIntf *DataLink;
 
 // Global variables
 unsigned int n_channels = 1440;
-unsigned int n_samples;
-float *data_matrix; // Channels * Samples
 bool stream_recording;
 bool testing;
 
@@ -215,7 +213,7 @@ extern "C"
 	}
 
 	// Start NeuroSeeker Probe
-	__declspec(dllexport) void NSK_Start(int buffer_size, bool stream, char* _stream_file)
+	__declspec(dllexport) void NSK_Start(bool stream, char* _stream_file)
 	{
 		// Error Code containers
 		DigitalControlErrorCode dec;
@@ -223,10 +221,6 @@ extern "C"
 
 		// Starting Nsk probe
 		std::cout << "Starting NeuroSeeker Probe\n";
-
-		// Allocate memory for recording buffer (1440 floats per sample)
-		n_samples = buffer_size;
-		data_matrix = (float *)malloc(sizeof(float) * n_channels * n_samples);
 
 		// Reset probe
 		std::cout << "Resetting probe: ";
@@ -255,22 +249,24 @@ extern "C"
 	}
 
 	// Read NeuroSeeker Raw Packets
-	__declspec(dllexport) float* NSK_Read()
+	__declspec(dllexport) int NSK_Read(float *buffer, int buffer_size)
 	{
 		// Error Code containers
 		ReadErrorCode rec;
 
 		// Fill data matrix with channel data from N packets (all_samp_ch0 -> all_samp_ch 1...all_samp_chN)
-		for (int i = 0; i < n_samples; i++)
+		for (int i = 0; i < buffer_size; i++)
 		{
 			// Read next packet (sample) from FIFO
 			rec = api.readElectrodeData(ep, NULL);
+			if (rec != READ_SUCCESS) return i;
+
 			for (int c = 0; c < n_channels; c++)
 			{
-				data_matrix[(c * n_samples) + i] = ep.getChannelData(c);
+				buffer[(c * buffer_size) + i] = ep.getChannelData(c);
 			}
 		}
-		return data_matrix;
+		return buffer_size;
 
 	}
 
@@ -311,9 +307,6 @@ extern "C"
 		std::cout << "Attempting to close Nsk Probe: ";
 		api.close();
 		std::cout << "Closed\n";
-
-		// Free memory from data buffer
-		free(data_matrix);
 	}
 
 
@@ -322,7 +315,7 @@ extern "C"
 	// Function Library for Loading NSK FIles
 	// --------------------------------------
 	// Open NeuroSeeker Data File
-	__declspec(dllexport) void NSK_Open_File(char *filename, int buffer_size)
+	__declspec(dllexport) void NSK_Open_File(char *filename)
 	{
 		// Error Code containers
 		ErrorCode ec;
@@ -333,16 +326,10 @@ extern "C"
 		DataLink = new NeuroseekerDataLinkFile(filename_str);
 		ec = api.datamode(true); // set ElectrodeMode
 		std::cout << ec << "\n";
-		n_samples = buffer_size;
-
-		// Allocate memory for recording buffer (1440 floats per sample)
-		n_samples = buffer_size;
-		data_matrix = (float *)malloc(sizeof(float) * n_channels * n_samples);
-
 	}
 
 	// Read NeuroSeeker Data File
-	__declspec(dllexport) float* NSK_Read_File()
+	__declspec(dllexport) int NSK_Read_File(float *buffer, int buffer_size)
 	{
 		// Error Code containers
 		ReadErrorCode rec;
@@ -353,18 +340,20 @@ extern "C"
 		// - Subtract median per Region Groups (2 region blocks)
 
 		// Fill data matrix with channel data from N packets (all_samp_ch0 -> all_samp_ch 1...all_samp_chN)
-		for (int i = 0; i < n_samples; i++)
+		for (int i = 0; i < buffer_size; i++)
 		{
 			// Read next packet (sample) from FIFO
 			rec = api.readElectrodeData(ep, DataLink);
+			if (rec != READ_SUCCESS) return i;
+
 			pos = ep.getCounter(0);
 			for (int c = 0; c < n_channels; c++)
 			{
-				data_matrix[(c * n_samples) + i] = ep.getChannelData(c);
+				buffer[(c * buffer_size) + i] = ep.getChannelData(c);
 			}
 		}
 		std::cout << rec << " " << pos << "\n";
-		return data_matrix;
+		return buffer_size;
 	}
 
 	// Close NeuroSeeker Data File
@@ -372,7 +361,6 @@ extern "C"
 	{
 		// Free memory from data buffer
 		free(DataLink);
-		free(data_matrix);
 	}
 
 }
