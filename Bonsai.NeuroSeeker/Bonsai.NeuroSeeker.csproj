@@ -127,6 +127,20 @@
     </None>
     <None Include="packages.config" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\Externals\NSK_API\Windows DLL\V1.8\libNeuroseekerAPI_msvc.dll">
+      <Link>libNeuroseekerAPI_msvc.dll</Link>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Include="..\Release\NeuroSeeker_C_DLL.dll">
+      <Link>NeuroSeeker_C_DLL.dll</Link>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Include="..\Release\NeuroSeeker_C_DLL.pdb">
+      <Link>NeuroSeeker_C_DLL.pdb</Link>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <StartAction>Program</StartAction>
