@@ -21,7 +21,6 @@ namespace Bonsai.NeuroSeeker
         // Class variables
         IObservable<OpenCV.Net.Mat> source;
         private int n_channels = 1440;
-        private static float[] float_buffer;
 
         // Properties
         [Category("Acquisition")]
@@ -39,18 +38,17 @@ namespace Bonsai.NeuroSeeker
 
         // Import relevant functions from Nsk C DLL
         [DllImport("NeuroSeeker_C_DLL", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
-        public static extern void NSK_Open_File(string DataFile, int BufferSize);
+        public static extern void NSK_Open_File(string DataFile);
 
         // Import relevant functions from Nsk C DLL
         [DllImport("NeuroSeeker_C_DLL", CallingConvention = CallingConvention.Cdecl)]
-        private static extern IntPtr NSK_Read_File();
+        private static extern int NSK_Read_File(IntPtr buffer, int buffer_size);
         public static OpenCV.Net.Mat NSK_Read_File(int n_channels, int buffer_size)
         {
-            OpenCV.Net.Mat ReturnArray = new OpenCV.Net.Mat(n_channels, buffer_size, OpenCV.Net.Depth.F32, 1);
-            // This seems unecessary
-            Marshal.Copy(NSK_Read_File(), float_buffer, 0, n_channels * buffer_size);
-            Marshal.Copy(float_buffer, 0, ReturnArray.Data, n_channels * buffer_size);
-            return ReturnArray;
+            var result = new OpenCV.Net.Mat(n_channels, buffer_size, OpenCV.Net.Depth.F32, 1);
+            var samplesRead = NSK_Read_File(result.Data, buffer_size);
+            if (samplesRead == 0) return null;
+            return result;
         }
 
         // Import relevant functions from Nsk C DLL
@@ -64,43 +62,37 @@ namespace Bonsai.NeuroSeeker
             BufferSize = 500;
 
             // Create a source of CvMats
-            source = Observable.Create<OpenCV.Net.Mat>(observer =>
+            source = Observable.Create<Mat>((observer, cancellationToken) =>
             {
-                // Open and Initialize
-                NSK_Open_File(DataFile, BufferSize);
-
-                // Start FIle thread
-                float_buffer = new float[n_channels * BufferSize];
-                var running = true;
-                var thread = new Thread(() =>
+                return Task.Factory.StartNew(() =>
                 {
-                    while (running)
+                    // Open and Initialize
+                    NSK_Open_File(DataFile);
+
+                    var bufferSize = BufferSize;
+                    using (var close = Disposable.Create(NSK_Close_File))
+                    using (var sampleSignal = new ManualResetEvent(false))
                     {
-                        // Read all channels from File
-                        observer.OnNext(NSK_Read_File(n_channels, BufferSize));
-
-                        // Read counter and synchro
-
-                        // Sleep to control buffer replay
-                        if(Interval == 0)
+                        while (!cancellationToken.IsCancellationRequested)
                         {
-                            Thread.Sleep(Interval);
+                            var result = NSK_Read_File(n_channels, BufferSize);
+                            if (result == null) break;
+                            observer.OnNext(result);
+
+                            var interval = Interval;
+                            if (interval > 0)
+                            {
+                                sampleSignal.WaitOne(interval);
+                            }
                         }
+
+                        observer.OnCompleted();
                     }
-                });
-
-                thread.Start();
-                return () =>
-                {
-                    // Stop acquisition thread
-                    running = false;
-                    thread.Join();
-
-                    // Close File
-                    NSK_Close_File();
-
-                };
-            }).PublishReconnectable().RefCount();
+                },
+                cancellationToken,
+                TaskCreationOptions.LongRunning,
+                TaskScheduler.Default);
+            });
         }
 
         // Generate source (whatever)

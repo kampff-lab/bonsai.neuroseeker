@@ -22,7 +22,6 @@ namespace Bonsai.NeuroSeeker
         // Class variables
         IObservable<OpenCV.Net.Mat> source;
         private int n_channels = 1440;
-        private static float[] float_buffer;
 
         // Properties
         [Category("Acquisition")]
@@ -95,18 +94,17 @@ namespace Bonsai.NeuroSeeker
 
         // Import relevant functions from Nsk C DLL
         [DllImport("NeuroSeeker_C_DLL", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void NSK_Start(int BufferSize, bool Stream, string StreamFile);
+        public static extern void NSK_Start(bool Stream, string StreamFile);
 
         // Import relevant functions from Nsk C DLL
         [DllImport("NeuroSeeker_C_DLL", CallingConvention = CallingConvention.Cdecl)]
-        private static extern IntPtr NSK_Read();
+        private static extern int NSK_Read(IntPtr buffer, int buffer_size);
         public static OpenCV.Net.Mat NSK_Read(int n_channels, int buffer_size)
         {
-            OpenCV.Net.Mat ReturnArray = new OpenCV.Net.Mat(n_channels, buffer_size, OpenCV.Net.Depth.F32, 1);
-            // This seems unecessary
-            Marshal.Copy(NSK_Read(), float_buffer, 0, n_channels * buffer_size);
-            Marshal.Copy(float_buffer, 0, ReturnArray.Data, n_channels * buffer_size);
-            return ReturnArray;
+            var result = new OpenCV.Net.Mat(n_channels, buffer_size, OpenCV.Net.Depth.F32, 1);
+            var samplesRead = NSK_Read(result.Data, buffer_size);
+            if (samplesRead == 0) return null;
+            return result;
         }
 
 
@@ -127,61 +125,57 @@ namespace Bonsai.NeuroSeeker
             ActiveRegions = new bool[12];
             int[] ActiveRegionsMarshal = new int[12];
             // Create a source of CvMats
-            source = Observable.Create<OpenCV.Net.Mat>(observer =>
+            source = Observable.Create<Mat>((observer, cancellationToken) =>
             {
-                // Open and Initialize
-                NSK_Open(LEDs);
-
-                // Configure ADCs and Channels
-                for (int i = 0; i < ActiveRegions.Length; ++i)
-                    ActiveRegionsMarshal[i] = Convert.ToByte(ActiveRegions[i]);
-                NSK_Configure(ActiveRegionsMarshal, TestMode, BiasVoltage, OffsetCSV, SlopeCSV, CompCSV, ChannelsCSV);
-
-                // Start Probe thread
-                float_buffer = new float[n_channels * BufferSize];
-                string streamFile = StreamFile;
-                if (!string.IsNullOrEmpty(streamFile))
+                return Task.Factory.StartNew(() =>
                 {
-                    PathHelper.EnsureDirectory(streamFile);
-                }
-                else
-                { 
-                    streamFile = System.IO.Path.Combine(System.IO.Directory.GetParent(ChannelsCSV).ToString(), "datalog.nsk");
-                    PathHelper.EnsureDirectory(streamFile);
-                }
-                streamFile = PathHelper.AppendSuffix(streamFile, Suffix);
-                NSK_Start(BufferSize, Stream, streamFile);
-                var running = true;
-                var thread = new Thread(() =>
-                {
-                    while (running)
+                    // Open and Initialize
+                    NSK_Open(LEDs);
+
+                    // Configure ADCs and Channels
+                    for (int i = 0; i < ActiveRegions.Length; ++i)
+                        ActiveRegionsMarshal[i] = Convert.ToByte(ActiveRegions[i]);
+                    NSK_Configure(ActiveRegionsMarshal, TestMode, BiasVoltage, OffsetCSV, SlopeCSV, CompCSV, ChannelsCSV);
+
+                    // Start Probe thread
+                    string streamFile = StreamFile;
+                    if (!string.IsNullOrEmpty(streamFile))
                     {
-                        // Read all channels from probe
-                        observer.OnNext(NSK_Read(n_channels, BufferSize));
-
-                        // Read counter and synchro
-
-                        // Adjust Bias Voltage (online)
-                        if(UpdateBias)
-                        {
-                            NSK_SetBiasVoltage(BiasVoltage);
-                            UpdateBias = false;
-                        }
+                        PathHelper.EnsureDirectory(streamFile);
                     }
-                });
+                    else
+                    {
+                        streamFile = System.IO.Path.Combine(System.IO.Directory.GetParent(ChannelsCSV).ToString(), "datalog.nsk");
+                        PathHelper.EnsureDirectory(streamFile);
+                    }
+                    streamFile = PathHelper.AppendSuffix(streamFile, Suffix);
+                    NSK_Start(Stream, streamFile);
 
-                thread.Start();
-                return () =>
-                {
-                    // Stop acquisition thread
-                    running = false;
-                    thread.Join();
+                    var bufferSize = BufferSize;
+                    using (var close = Disposable.Create(NSK_Close))
+                    using (var sampleSignal = new ManualResetEvent(false))
+                    {
+                        while (!cancellationToken.IsCancellationRequested)
+                        {
+                            var result = NSK_Read(n_channels, BufferSize);
+                            if (result == null) break;
+                            observer.OnNext(result);
 
-                    // Close probe
-                    NSK_Close();
+                            // Adjust Bias Voltage (online)
+                            if (UpdateBias)
+                            {
+                                NSK_SetBiasVoltage(BiasVoltage);
+                                UpdateBias = false;
+                            }
+                        }
 
-                };
-            }).PublishReconnectable().RefCount();
+                        observer.OnCompleted();
+                    }
+                },
+                cancellationToken,
+                TaskCreationOptions.LongRunning,
+                TaskScheduler.Default);
+            });
         }
 
         // Generate source (whatever)
