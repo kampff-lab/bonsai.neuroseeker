@@ -329,7 +329,7 @@ extern "C"
 	}
 
 	// Read NeuroSeeker Data File
-	__declspec(dllexport) int NSK_Read_File(float *buffer, int buffer_size)
+	__declspec(dllexport) int NSK_Read_File(float *buffer, unsigned short *sync_buffer, int buffer_size)
 	{
 		// Error Code containers
 		ReadErrorCode rec;
@@ -347,9 +347,11 @@ extern "C"
 			if (rec != READ_SUCCESS) return i;
 
 			pos = ep.getCounter(0);
+			sync_buffer[i] = ep.getSynchronization();
 			for (int c = 0; c < n_channels; c++)
 			{
 				buffer[(c * buffer_size) + i] = ep.getChannelData(c);
+				
 			}
 		}
 		std::cout << rec << " " << pos << "\n";
