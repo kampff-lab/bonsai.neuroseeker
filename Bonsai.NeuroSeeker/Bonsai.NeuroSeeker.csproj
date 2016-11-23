@@ -111,6 +111,7 @@
     <Compile Include="DataModelPart.cs" />
     <Compile Include="DrawDataModel.cs" />
     <Compile Include="File.cs" />
+    <Compile Include="NskDataFrame.cs" />
     <Compile Include="NSK_IplImageTexture.cs" />
     <Compile Include="NSK_Visualizer.cs" />
     <Compile Include="ObservableCombinators.cs" />
